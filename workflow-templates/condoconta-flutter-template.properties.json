@@ -1,0 +1,12 @@
+{
+    "name": "Condo Conta Fluuter Workflow",
+    "description": "Condo Conta Fluuter Workflow template.",
+    "iconName": "example-icon",
+    "categories": [
+        "Flutter"
+    ],
+    "filePatterns": [
+        "pubspec.yaml$",
+        ".*\\.md$"
+    ]
+}
