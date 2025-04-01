@@ -1,0 +1,16 @@
+{
+    "name": "Condo Conta Sistemas internos Workflow",
+    "description": "Condo Conta Sistemas Internos Workflow template.",
+    "iconName": "example-icon",
+    "categories": [
+        "Python"
+    ],
+    "filePatterns": [
+        "bitbucket-pipelins.yml$",
+	"Dockerfile$",
+	"Makefile$",
+        ".*\\.md$",
+        ".*\\.txt$"
+        ".*\\.py$"
+    ]
+}

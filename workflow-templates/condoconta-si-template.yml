@@ -1,0 +1,68 @@
+name: Deploy internal system
+on:
+  push:
+    branches:
+      - main
+      - development
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          token: ${{ secrets.PRIVATE_TOKEN_GITHUB }}
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@62f4f872db3836360b72999f4b87f1ff13310f3a
+      - uses: benjlevesque/short-sha@v3.0
+        id: short-sha
+        with:
+          length: 6
+      - name: Build, tag, and push image to Amazon ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.head_ref || github.ref_name }}-${{ steps.short-sha.outputs.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/${{vars.ECR_REPOSITORY}}:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/${{vars.ECR_REPOSITORY}}:$IMAGE_TAG
+          echo "image=$ECR_REGISTRY/${{vars.ECR_REPOSITORY}}:$IMAGE_TAG" >> $GITHUB_OUTPUT
+  deployment:
+    name: Deployment
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'pro' || github.ref == 'refs/heads/homologation' && 'hom' || 'dev' }}
+    needs: [build]
+    steps:
+    - uses: actions/checkout@v4
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    - run: aws eks update-kubeconfig --region us-east-1 --name ${{vars.EKS_CLUSTER_NAME}}
+    - uses: azure/setup-helm@v4.3.0
+      with:
+        version: 'v3.13.1' # default is latest (stable)
+      id: install
+    - run: helm plugin install https://github.com/hypnoglow/helm-s3.git
+    - run: helm repo add condohelm s3://condoconta-helm-charts/helm-packages/apps/open-api/
+    - run: helm repo update
+    - run: helm pull condohelm/open-api --version ${{vars.CHART_VERSION}} --untar
+    - uses: benjlevesque/short-sha@v3.0
+      id: short-sha
+      with:
+        length: 6
+    - run: helm upgrade --install ${{vars.HELM_DEPLOY_NAME}} -n ${{vars.NAMESPACE}} ./open-api --debug -f ${{vars.VALUES}}/${{vars.K8S_ENV}}/values.yaml  --set image.tag=$TAG
+      env:
+        TAG: ${{ github.head_ref || github.ref_name }}-${{ steps.short-sha.outputs.sha }}
+        
+
